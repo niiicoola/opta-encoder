@@ -267,22 +267,30 @@ static void maintenancePoll() {
   if (malformed || !endHeaders) httpReply(c, 400, "{\"error\":\"invalid_headers\"}");
   else if (status) {
     if (!otaNonce[0] || millis() - nonceIssued > 60000) rotateNonce();
-    core_util_critical_section_enter();
-    int64_t position = decoder.position;
-    uint64_t total = decoder.total;
-    uint32_t errors = decoder.invalid;
-    core_util_critical_section_exit();
-    char body[768];
+    const AcquisitionData current = acquisitionSnapshot();
+    char positionJson[32];
+    char detail[192] = {};
+#if GERP_MODE_SHEETS
+    strcpy(positionJson, "null"); // Un conteggio di fogli non e' una posizione.
+    snprintf(detail, sizeof(detail),
+      ",\"sheet_count\":\"%llu\",\"input_active\":%s,\"armed\":%s,\"rejected_present\":%lu,\"rejected_clear\":%lu",
+      static_cast<unsigned long long>(current.total), current.active ? "true" : "false", current.armed ? "true" : "false",
+      static_cast<unsigned long>(current.rejectedPresent), static_cast<unsigned long>(current.rejectedClear));
+#else
+    snprintf(positionJson, sizeof(positionJson), "\"%lld\"", static_cast<long long>(current.position));
+#endif
+    char body[1024];
     snprintf(body, sizeof(body),
       "{\"protocol\":\"%s\",\"firmware\":\"%s\",\"boot_id\":\"%s\",\"nonce\":\"%s\","
-      "\"ota_ready\":%s,\"storage_result\":%d,\"bootloader\":%u,\"position\":\"%lld\","
+      "\"acquisition_mode\":\"%s\",\"profile_id\":\"%s\","
+      "\"ota_ready\":%s,\"storage_result\":%d,\"bootloader\":%u,\"position\":%s,"
       "\"total\":\"%llu\",\"errors\":%lu,\"test_mode\":true,\"uptime_ms\":%lu,"
-      "\"partition_type\":%lu,\"partition_start\":%lu,\"partition_sectors\":%lu,\"sector_bytes\":%lu}",
-      OTA_PROTOCOL, GERP_FIRMWARE_VERSION, bootId, otaNonce, otaStorageResult == 0 ? "true" : "false",
-      otaStorageResult, *reinterpret_cast<const uint8_t *>(0x0801f001), position, total,
-      static_cast<unsigned long>(errors), static_cast<unsigned long>(millis()),
+      "\"partition_type\":%lu,\"partition_start\":%lu,\"partition_sectors\":%lu,\"sector_bytes\":%lu%s}",
+      OTA_PROTOCOL, GERP_FIRMWARE_VERSION, bootId, otaNonce, GERP_ACQUISITION_MODE, GERP_ACQUISITION_PROFILE_ID,
+      otaStorageResult == 0 ? "true" : "false", otaStorageResult, *reinterpret_cast<const uint8_t *>(0x0801f001), positionJson,
+      static_cast<unsigned long long>(current.total), static_cast<unsigned long>(current.invalid), static_cast<unsigned long>(millis()),
       static_cast<unsigned long>(otaStorage.partitionType), static_cast<unsigned long>(otaStorage.partitionStart),
-      static_cast<unsigned long>(otaStorage.partitionSectors), static_cast<unsigned long>(otaStorage.sectorBytes));
+      static_cast<unsigned long>(otaStorage.partitionSectors), static_cast<unsigned long>(otaStorage.sectorBytes), detail);
     httpReply(c, 200, body);
   } else if (!update) httpReply(c, 404, "{\"error\":\"not_found\"}");
   else if (!hasLength || length < 256) httpReply(c, 400, "{\"error\":\"invalid_length\"}");

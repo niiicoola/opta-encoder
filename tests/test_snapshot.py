@@ -3,9 +3,12 @@ import importlib.util
 import logging
 from pathlib import Path
 import socket
+import sys
 import unittest
 
 from opcua import Client, Server, ua
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 spec = importlib.util.spec_from_file_location(
     "reader", Path(__file__).resolve().parents[1] / "tools/read_encoder_opcua.py")

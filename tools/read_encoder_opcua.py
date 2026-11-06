@@ -6,10 +6,10 @@ import logging
 import sys
 import time
 
-from opcua import Client, ua
+from opcua import Client
+from opcua_snapshot import MAX_NODES_PER_READ, coherent_snapshot, read_good
 
 NAMESPACE = "urn:gerp:encoder:v1"
-MAX_NODES_PER_READ = 8
 FIELDS = (
     "Encoder.NetPosition", "Encoder.TotalPulses", "Encoder.Rpm",
     "Encoder.CountsPerRevolution", "Encoder.ProfileId", "Encoder.Simulation",
@@ -18,53 +18,12 @@ FIELDS = (
 )
 
 
-def read_good(node):
-    value = node.get_data_value()
-    value.StatusCode.check()
-    return value.Value.Value
-
-
 def snapshot(client, allow_simulation=False, allow_test=False, diagnostics=False):
-    namespace = client.get_namespace_index(NAMESPACE)
-    node = lambda name: client.get_node(ua.NodeId(name, namespace))
-    boot_node = node("Device.BootId")
-    sequence_node = node("Encoder.SampleSequence")
-    for _ in range(5):
-        boot_before = read_good(boot_node)
-        before = read_good(sequence_node)
-        if before % 2:
-            continue
-        fields = FIELDS + (("Encoder.LevelA", "Encoder.LevelB", "Encoder.EdgesA", "Encoder.EdgesB",
-                            "Encoder.InvalidTransitions", "Device.MeasurementStatus") if diagnostics else ())
-        nodes = [node(name) for name in fields]
-        # Blocchi piccoli: sul dispositivo in prova il blocco diagnostico da 16
-        # nodi va in timeout. La sequenza prima/dopo conserva la coerenza tra blocchi.
-        values = []
-        for offset in range(0, len(nodes), MAX_NODES_PER_READ):
-            batch = nodes[offset:offset + MAX_NODES_PER_READ]
-            received = client.uaclient.get_attributes([n.nodeid for n in batch], ua.AttributeIds.Value)
-            if len(received) != len(batch):
-                raise ValueError("Risposta OPC UA incompleta")
-            values.extend(received)
-        result = {}
-        for name, value in zip(fields, values):
-            value.StatusCode.check()
-            result[name] = value.Value.Value
-        after = read_good(sequence_node)
-        boot_after = read_good(boot_node)
-        if before != after or after % 2 or boot_before != boot_after:
-            continue
-        if result["Encoder.Simulation"] and not allow_simulation:
-            raise ValueError("SIMULAZIONE: dati esclusi dalla produzione; usare --allow-simulation per il test")
-        if not result["Encoder.Simulation"] and (result["Encoder.TestMode"] or not result["Encoder.MeasurementValid"]) and not allow_test:
-            raise ValueError("TEST NON VALIDATO: dati esclusi dalla produzione; usare --allow-test per la diagnostica")
-        result["Device.BootId"] = boot_after
-        result["Encoder.SampleSequence"] = after
-        # JSON conserva i 64 bit come stringhe, anche per eventuali consumer JavaScript.
-        for name in ("Encoder.NetPosition", "Encoder.TotalPulses", "Device.UptimeMs"):
-            result[name] = str(result[name])
-        return result
-    raise RuntimeError("Impossibile ottenere un campione coerente; ripetere la lettura")
+    fields = FIELDS + (("Encoder.LevelA", "Encoder.LevelB", "Encoder.EdgesA", "Encoder.EdgesB",
+                        "Encoder.InvalidTransitions", "Device.MeasurementStatus") if diagnostics else ())
+    return coherent_snapshot(client, NAMESPACE, fields, "Encoder",
+                             ("Encoder.NetPosition", "Encoder.TotalPulses", "Device.UptimeMs"),
+                             allow_simulation, allow_test)
 
 
 def main():

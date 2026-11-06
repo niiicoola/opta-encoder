@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "profile_id": "heschen-e3f-ds10p3-sheets",
+  "acquisition_mode": "sheet_counter",
+  "model": "HESCHEN E3F-DS10P3 PNP NO+NC",
+  "firmware_profile_id": "real-sheets-heschen-pnp-diagnostic-v1",
+  "compatible_board": "AFX00003",
+  "qualification": "diagnostic_only",
+  "active_high": true,
+  "present_stable_us": 2000,
+  "clear_stable_us": 2000,
+  "idle_timeout_ms": 10000,
+  "max_sheets_per_minute_nominal": 50,
+  "wiring": {
+    "supply": "24 V DC, 0 V comune con Opta; verificare lo schema sul sensore",
+    "signal": "Uscita PNP NO verso I1; I2 non utilizzato",
+    "unused": "Uscita NC scollegata e isolata: NO e NC non sono fasi A/B",
+    "interface": "PNP a 24 V; nessuna resistenza di pull-up esterna"
+  },
+  "limitations": [
+    "Profilo di collaudo, non qualificato per contabilizzazione della produzione.",
+    "Presenza e interspazio devono superare i filtri di 2 ms, provvisori e da verificare sul segnale reale.",
+    "All'avvio si attende un'assenza stabile: un foglio gia' presente non viene contato.",
+    "Conta passaggi: non riconosce verso, doppio foglio, qualita' o scarti.",
+    "I 50 fogli/min sono il requisito nominale, non un filtro che scarta automaticamente i passaggi piu' rapidi.",
+    "Fogli/min calcolati dall'intervallo fra due conteggi; velocita' non disponibile prima del secondo foglio o dopo 10 s di inattivita'.",
+    "Contatori azzerati al riavvio; persistenza non implementata.",
+    "La modalita' e i filtri vengono inclusi nel BIN: non sono modificabili a caldo via rete."
+  ]
+}

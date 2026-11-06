@@ -1,6 +1,6 @@
 #include <cassert>
 #include <initializer_list>
-#include "../firmware/opta_encoder_reader/Quadrature.h"
+#include "../firmware/opta_encoder_lan/Quadrature.h"
 
 int main() {
   volatile Quadrature encoder;

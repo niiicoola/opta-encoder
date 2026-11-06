@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 from opta_project import ROOT, FQBN, BUILD_PROFILE, SKETCH, config_file, find_cli
 from opta_lan import status, validate_image
-from opta_profiles import load_profile
+from opta_profiles import acquisition_mode, load_profile
 
 DEVICE_FIELDS = {"schema_version", "device_id", "model", "usb_serial", "site", "gerp_machine_id",
                  "encoder_profile", "firmware_version", "maintenance_url", "opcua_endpoint"}
@@ -122,7 +122,8 @@ def check_release(directory, device):
     if (metadata.get("version") != device["firmware_version"] or metadata.get("board") != FQBN
             or metadata.get("encoder_profile") != device["encoder_profile"]
             or metadata.get("qualification") != "diagnostic_only"
-            or metadata.get("counts_per_revolution") != profile["counts_per_revolution"]
+            or metadata.get("acquisition_mode", "rotary_encoder") != acquisition_mode(profile)
+            or metadata.get("counts_per_revolution") != profile.get("counts_per_revolution")
             or metadata.get("firmware_profile_id") != profile["firmware_profile_id"]
             or metadata.get("bytes") != len(content)
             or metadata.get("sha256") != hashlib.sha256(content).hexdigest()
@@ -189,18 +190,37 @@ def assess_samples(device, profile, before, samples, after):
     boot = before.get("boot_id")
     if not isinstance(boot, str) or not re.fullmatch(r"[a-f0-9]{32}", boot) or after.get("boot_id") != boot:
         raise ValueError("Riavvio durante la verifica o BootId non valido")
+    mode = acquisition_mode(profile)
+    sheets = mode == "sheet_counter"
+    for state in (before, after):
+        if state.get("acquisition_mode", "rotary_encoder") != mode:
+            raise ValueError("Modalita' HTTP diversa dal profilo assegnato")
+        if sheets and state.get("profile_id") != profile["firmware_profile_id"]:
+            raise ValueError("Profilo HTTP del contafogli diverso da quello assegnato")
+    prefix = "SheetCounter" if sheets else "Encoder"
     previous = None
     errors = None
     for sample in samples:
-        if (sample.get("Device.BootId") != boot or sample.get("Encoder.ProfileId") != profile["firmware_profile_id"]
-                or sample.get("Encoder.CountsPerRevolution") != profile["counts_per_revolution"]
-                or sample.get("Encoder.Simulation") is not False
-                or sample.get("Encoder.TestMode") is not True or sample.get("Encoder.MeasurementValid") is not False):
+        if (sample.get("Device.BootId") != boot or sample.get(f"{prefix}.ProfileId") != profile["firmware_profile_id"]
+                or sample.get(f"{prefix}.Simulation") is not False
+                or sample.get(f"{prefix}.TestMode") is not True or sample.get(f"{prefix}.MeasurementValid") is not False):
             raise ValueError("Identità di avvio, profilo o stato diagnostico OPC UA diverso da quello atteso")
-        position = int(sample["Encoder.NetPosition"])
-        total = int(sample["Encoder.TotalPulses"])
+        if sheets:
+            if sample.get("Device.AcquisitionMode") != "sheet_counter":
+                raise ValueError("Il server OPC UA non e' in modalita' contafogli")
+            position = None
+            total = int(sample["SheetCounter.TotalSheets"])
+            invalid = 0
+            for field in ("SheetCounter.RejectedPresentPulses", "SheetCounter.RejectedClearPulses"):
+                if int(sample[field]) < 0:
+                    raise ValueError("Diagnostica contafogli non valida")
+        else:
+            if sample.get("Encoder.CountsPerRevolution") != profile["counts_per_revolution"]:
+                raise ValueError("Conteggi per giro diversi dal profilo")
+            position = int(sample["Encoder.NetPosition"])
+            total = int(sample["Encoder.TotalPulses"])
+            invalid = int(sample["Encoder.InvalidTransitions"])
         uptime = int(sample["Device.UptimeMs"])
-        invalid = int(sample["Encoder.InvalidTransitions"])
         if total < 0 or uptime < 0 or invalid < 0:
             raise ValueError("Contatori diagnostici non validi")
         if errors is not None and invalid != errors:
@@ -209,11 +229,19 @@ def assess_samples(device, profile, before, samples, after):
             raise ValueError("Campioni non aggiornati o conteggio totale diminuito durante lo stesso avvio")
         errors = invalid
         previous = total, uptime
-    return {"state": "diagnostic_read_ok", "firmware_version": after["firmware"], "boot_id": boot,
-            "samples": len(samples), "position": str(position), "total": str(total), "invalid_transitions": errors,
+    result = {"state": "diagnostic_read_ok", "firmware_version": after["firmware"], "boot_id": boot,
+            "acquisition_mode": mode,
+            "samples": len(samples), "position": str(position) if position is not None else None, "total": str(total),
             "remote_hardware_identity_verified": False,
             "limits": ["Identità hardware remota non esposta dal firmware attuale: verificare il percorso di rete e il registro USB.",
                        "Questo rapporto verifica la comunicazione; precisione, velocità massima e persistenza richiedono collaudi separati."]}
+    if sheets:
+        result.update(sheet_count=str(total),
+                      rejected_present=int(samples[-1]["SheetCounter.RejectedPresentPulses"]),
+                      rejected_clear=int(samples[-1]["SheetCounter.RejectedClearPulses"]))
+    else:
+        result["invalid_transitions"] = errors
+    return result
 
 
 def verify(args, device, profile):
@@ -222,7 +250,8 @@ def verify(args, device, profile):
     base = check_url(args.maintenance_url or device["maintenance_url"], "http")
     endpoint = check_url(args.opcua_endpoint or device["opcua_endpoint"], "opc.tcp")
     before = status(base)
-    command = [sys.executable, str(ROOT / "tools/read_encoder_opcua.py"), endpoint,
+    reader = "read_sheet_counter_opcua.py" if acquisition_mode(profile) == "sheet_counter" else "read_encoder_opcua.py"
+    command = [sys.executable, str(ROOT / "tools" / reader), endpoint,
                "--allow-test", "--diagnostics", "--samples", str(args.samples), "--interval", "1"]
     print(shlex.join(command), flush=True)
     response = subprocess.run(command, capture_output=True, text=True, timeout=30 + args.samples * 20)
@@ -245,7 +274,7 @@ def main():
     new.add_argument("--site")
     new.add_argument("--machine-id", type=int)
     new.add_argument("--version", required=True)
-    new.add_argument("--encoder-profile", required=True)
+    new.add_argument("--profile", "--encoder-profile", dest="encoder_profile", required=True)
     new.add_argument("--maintenance-url", required=True)
     new.add_argument("--opcua-endpoint", required=True)
     discover = sub.add_parser("discover", help="mostra schede e seriali USB; non carica firmware")
@@ -278,7 +307,8 @@ def main():
             device, profile = load_device(args.device)
             if args.command == "validate":
                 result = {"state": "registry_valid", "device_id": device["device_id"],
-                          "encoder_profile": profile["profile_id"], "production_qualified": False}
+                          "encoder_profile": profile["profile_id"], "acquisition_mode": acquisition_mode(profile),
+                          "production_qualified": False}
                 if args.release:
                     image, metadata = check_release(args.release, device)
                     result.update(state="release_valid", image=str(image), sha256=metadata["sha256"])

@@ -10,13 +10,14 @@ import subprocess
 import sys
 
 from opta_project import ROOT, FQBN, BUILD_PROFILE, SKETCH, config_file, find_cli
-from opta_profiles import load_profile, profile_header
+from opta_profiles import acquisition_mode, load_profile, profile_header
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="numero.numero.numero-lan, diverso per ogni release")
-    parser.add_argument("--encoder-profile", required=True, help="profilo JSON in profiles/ senza estensione")
+    parser.add_argument("--profile", "--encoder-profile", dest="encoder_profile", required=True,
+                        help="profilo di acquisizione JSON in profiles/ senza estensione")
     parser.add_argument("--upload", metavar="IP_O_URL", help="applica via LAN o tunnel e riavvia l'Opta")
     parser.add_argument("--arduino-cli")
     parser.add_argument("--config-file", type=Path)
@@ -46,7 +47,8 @@ def main():
         shutil.copyfile(image, saved)
         manifest = {"version": args.version, "board": FQBN, "build_profile": BUILD_PROFILE,
                     "encoder_profile": profile["profile_id"], "qualification": profile["qualification"],
-                    "counts_per_revolution": profile["counts_per_revolution"],
+                    "acquisition_mode": acquisition_mode(profile),
+                    "counts_per_revolution": profile.get("counts_per_revolution"),
                     "firmware_profile_id": profile["firmware_profile_id"],
                     "sha256": hashlib.sha256(saved.read_bytes()).hexdigest(), "bytes": saved.stat().st_size}
         (release / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

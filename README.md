@@ -1,4 +1,27 @@
-# Encoder OPC UA su Arduino Opta Lite
+# Acquisizione OPC UA su Arduino Opta Lite
+
+Un unico progetto firmware con modalita' scelta dal profilo in compilazione:
+
+| Modalita' | Funzione | Guida |
+|---|---|---|
+| `rotary_encoder` | Posizione A/B x4 con verso | [Preparazione encoder](docs/opta/preparazione-serie.md) |
+| `sheet_counter` | Un foglio per presenza, riarmo dopo interspazio | [Contafogli HESCHEN](docs/opta/contafogli.md) |
+
+La modalita' contafogli e' predisposta per HESCHEN E3F-DS10P3 PNP NO+NC su I1,
+24 V, requisito di 50 fogli/minuto. Usa interrupt e timer, senza filtro adattivo.
+Mantiene OPC UA e aggiornamenti LAN firmati. La release `0.4.0-lan` e' stata
+compilata ma **non caricata su un dispositivo**; filtri, sensore e precisione
+devono essere collaudati sulla macchina. Il cambio di modalita' richiede una
+nuova compilazione e un riavvio, non e' un'impostazione modificabile a caldo.
+
+```sh
+python3 tools/provision_opta.py validate devices/example-sheets.json
+python3 tools/build_opta_lan.py --version 0.4.0-lan --profile heschen-e3f-ds10p3-sheets
+```
+
+Il secondo comando crea la release solo se non esiste gia'; non sovrascrive il
+BIN archiviato e non carica firmware. Per modifiche successive usare una nuova
+versione. I profili e NodeId encoder precedenti restano supportati.
 
 ## Preparare la serie
 
