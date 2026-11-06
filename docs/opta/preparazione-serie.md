@@ -1,5 +1,9 @@
 # Preparazione di più Opta Lite
 
+Per l'intero percorso operativo, compresi rete, reset e recupero, partire dalla
+[guida del tecnico](guida-tecnico.md). Questa pagina approfondisce il registro
+e la preparazione della serie; per il sensore ottico vedere [contafogli](contafogli.md).
+
 ## Stato e perimetro
 
 Repository dedicato a firmware, profili encoder, strumenti e collaudi.
@@ -180,8 +184,9 @@ sull'esemplare pilota prima di applicare una release alle altre unità.
 
 Versionare sorgenti, profili non segreti, esempi, test e documentazione.
 Sono esclusi chiavi, inventario reale, rapporti, toolchain, cache e binari.
-Per pubblicare il repository scegliere un repository **privato** e controllare
-il contenuto prima del primo commit/push. Non è stato creato un remoto automaticamente.
+Il repository remoto è `niiicoola/opta-encoder`. Prima di condividere materiale
+verificare la visibilità e il contenuto: inventario reale, chiavi, rapporti e
+pacchetti di rilascio richiedono un archivio operativo separato e protetto.
 
 ```sh
 .venv/bin/python -m unittest discover -s tests -v

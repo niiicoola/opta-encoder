@@ -1,5 +1,10 @@
 # Aggiornamenti firmware tramite LAN
 
+Per installare una nuova unità o recuperare una scheda usata seguire prima la
+[guida del tecnico](guida-tecnico.md), valida anche per la modalità contafogli.
+I percorsi personali e le versioni sotto documentano il prototipo e le prove
+storiche; non sono una configurazione da replicare sulle nuove unità.
+
 Lettore dedicato Arduino/C++, non progetto Arduino PLC IDE. Il programma conserva
 lettura encoder su I1/I2, diagnostica seriale e server OPC UA sulla porta 4840.
 Il servizio manutenzione HTTP usa la porta 8080, esclusivamente su LAN o VPN.

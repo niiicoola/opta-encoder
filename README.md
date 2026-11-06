@@ -1,5 +1,12 @@
 # Acquisizione OPC UA su Arduino Opta Lite
 
+**Per consegnare il progetto a un tecnico IT partire dalla
+[guida di installazione e manutenzione](docs/opta/guida-tecnico.md)**:
+postazione, prima installazione USB, indirizzo fisso tramite prenotazione DHCP,
+predisposizione OTA, aggiornamenti LAN, prove e recupero dopo reset.
+La configurazione di un vero IP statico nel firmware richiede ancora una
+modifica e una release dedicata; non è un parametro disponibile negli script.
+
 Un unico progetto firmware con modalita' scelta dal profilo in compilazione:
 
 | Modalita' | Funzione | Guida |
